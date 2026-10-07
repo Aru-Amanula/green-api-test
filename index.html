@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GREEN-API: тестовое задание</title>
+<style>
+  :root { --green:#1f7a3f; --line:#b9c2bb; --bg:#f6f8f6; --ink:#1b241e; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--ink); }
+  .wrap { max-width:960px; margin:0 auto; padding:24px 16px; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; }
+  @media (max-width:700px){ .wrap{ grid-template-columns:1fr; } }
+  .col { display:flex; flex-direction:column; gap:10px; }
+  input, textarea { width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:6px; font:inherit; background:#fff; }
+  textarea { resize:vertical; min-height:80px; }
+  button { padding:12px; border:1px solid var(--green); background:#fff; color:var(--green); border-radius:6px; font:inherit; font-weight:600; cursor:pointer; }
+  button:hover { background:var(--green); color:#fff; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline:2px solid var(--green); outline-offset:2px; }
+  button:disabled { opacity:.5; cursor:wait; }
+  .gap { height:14px; }
+  label { font-style:italic; }
+  #out { flex:1; min-height:420px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="col">
+    <input id="idInstance" placeholder="idInstance" autocomplete="off">
+    <input id="apiToken" placeholder="ApiTokenInstance" autocomplete="off">
+    <div class="gap"></div>
+    <button data-act="getSettings">getSettings</button>
+    <button data-act="getStateInstance">getStateInstance</button>
+    <div class="gap"></div>
+    <input id="msgPhone" placeholder="77771234567" inputmode="numeric">
+    <textarea id="msgText" placeholder="Hello World!"></textarea>
+    <button data-act="sendMessage">sendMessage</button>
+    <div class="gap"></div>
+    <input id="filePhone" placeholder="77771234567" inputmode="numeric">
+    <input id="fileUrl" placeholder="https://my.site.com/img/horse.png">
+    <button data-act="sendFileByUrl">sendFileByUrl</button>
+  </div>
+  <div class="col">
+    <label for="out">Ответ:</label>
+    <textarea id="out" readonly></textarea>
+  </div>
+</div>
+
+<script>
+const API_URL = "https://api.green-api.com";
+const $ = id => document.getElementById(id);
+const out = $("out");
+
+function show(data) {
+  out.value = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+}
+
+function chatId(raw) {
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) throw new Error("Введите номер телефона (только цифры, с кодом страны)");
+  return digits + "@c.us";
+}
+
+async function call(method, body) {
+  const id = $("idInstance").value.trim();
+  const token = $("apiToken").value.trim();
+  if (!id || !token) throw new Error("Заполните idInstance и ApiTokenInstance");
+  const url = `${API_URL}/waInstance${id}/${method}/${token}`;
+  const res = await fetch(url, body ? {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  } : { method: "GET" });
+  const text = await res.text();
+  try { return JSON.parse(text); } catch { return text || `HTTP ${res.status}`; }
+}
+
+const actions = {
+  getSettings: () => call("getSettings"),
+  getStateInstance: () => call("getStateInstance"),
+  sendMessage: () => {
+    const message = $("msgText").value;
+    if (!message.trim()) throw new Error("Введите текст сообщения");
+    return call("sendMessage", { chatId: chatId($("msgPhone").value), message });
+  },
+  sendFileByUrl: () => {
+    const urlFile = $("fileUrl").value.trim();
+    if (!/^https?:\/\//.test(urlFile)) throw new Error("Введите корректную ссылку на файл (http/https)");
+    const fileName = decodeURIComponent(urlFile.split("?")[0].split("/").pop()) || "file";
+    return call("sendFileByUrl", { chatId: chatId($("filePhone").value), urlFile, fileName });
+  }
+};
+
+document.querySelectorAll("button[data-act]").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    show("Загрузка...");
+    try {
+      show(await actions[btn.dataset.act]());
+    } catch (e) {
+      show("Ошибка: " + e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+});
+</script>
+</body>
+</html>
